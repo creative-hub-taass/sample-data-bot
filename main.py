@@ -1,5 +1,7 @@
 import re
 from datetime import datetime, timedelta, timezone
+from pprint import pprint
+from random import Random
 
 import requests
 from dateutil import parser
@@ -97,6 +99,35 @@ def load_artists(creativehub_token, artists):
                                  headers={"X-ACCESS-TOKEN": creativehub_token})
         json = response.json()
         artist["creativehub-id"] = json["id"]
+
+
+def load_artworks(creativehub_token, artworks, artists):
+    random = Random()
+    for _artwork in artworks.values():
+        _date = re.sub(r"[\-/]\d*", "", _artwork["date"].strip())
+        _date = re.sub(r"[a-zA-Z.,]", "", _date)
+        date = parser.parse(_date) if _date else datetime.now()
+        unique = bool(_artwork["unique"] or "true")
+        copies = 1 if unique else random.randint(2, 10)
+        onsale = random.choice([_artwork["can_acquire"], True, False])
+        artwork = {
+            "creationDateTime": date.date().isoformat(),
+            "name": _artwork["title"],
+            "description": _artwork["medium"] + " " + _artwork["collecting_institution"],
+            "type": _artwork["category"],
+            "copies": copies,
+            "attributes": {
+                "size": _artwork["dimensions"]["cm"]["text"]
+            },
+            "images": {_artwork["image"]},
+            "onSale": onsale,
+            "price": round(random.random() * 900 + 100, 2) if onsale else None,
+            "currency": "EUR" if onsale else None,
+            "paymentEmail": "payments@creativehub.com" if onsale else None,
+            "availableCopies": copies - random.randint(0, 10) if onsale else 0
+        }
+        pprint(artwork)
+        # response = requests.post("http://localhost:8080/api/v1/artworks/", json=artwork, headers={"X-ACCESS-TOKEN": creativehub_token})
 
 
 def get_creativehub_token():
