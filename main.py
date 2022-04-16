@@ -1,11 +1,10 @@
+import re
 from datetime import datetime, timedelta, timezone
+from pprint import pprint
 
 import requests
-
-artsy_auth = {
-    "client_id": "f31d4faf871963e30f66",
-    "client_secret": "2b56cd64b94facd6356cc623dd789048"
-}
+from dateutil import parser
+from nameparser import HumanName
 
 
 def main():
@@ -17,16 +16,18 @@ def main():
     print("artworks:", len(artworks))
     print("artists:", len(artists))
     print("events:", len(events))
+    creativehub_token = get_creativehub_token()
+    load_artists(creativehub_token, artists)
 
 
-def get_artworks_artists(artsy_token, count):
-    response = requests.get(f"https://api.artsy.net/api/artworks?size={count}", headers={"X-XAPP-Token": artsy_token})
+def get_artworks_artists(token, count):
+    response = requests.get(f"https://api.artsy.net/api/artworks?size={count}", headers={"X-XAPP-Token": token})
     json = response.json()
     _artworks = list(json["_embedded"]["artworks"])
     artists = {}
     artworks = {}
     for artwork in _artworks:
-        response = requests.get(artwork["_links"]["artists"]["href"], headers={"X-XAPP-Token": artsy_token})
+        response = requests.get(artwork["_links"]["artists"]["href"], headers={"X-XAPP-Token": token})
         json = response.json()
         _artists = list(json["_embedded"]["artists"])
         if _artists:
@@ -42,9 +43,9 @@ def get_artworks_artists(artsy_token, count):
     return artworks, artists
 
 
-def get_events(artsy_token, count):
+def get_events(token, count):
     response = requests.get(f"https://api.artsy.net/api/shows?status=upcoming&size={count}",
-                            headers={"X-XAPP-Token": artsy_token})
+                            headers={"X-XAPP-Token": token})
     json = response.json()
     _shows = list(json["_embedded"]["shows"])
     shows = {}
@@ -61,9 +62,52 @@ def get_events(artsy_token, count):
 
 
 def get_artsy_token():
-    response = requests.post("https://api.artsy.net/api/tokens/xapp_token", data=artsy_auth)
+    auth_data = {
+        "client_id": "f31d4faf871963e30f66",
+        "client_secret": "2b56cd64b94facd6356cc623dd789048"
+    }
+    response = requests.post("https://api.artsy.net/api/tokens/xapp_token", data=auth_data)
     json = response.json()
     return json["token"]
+
+
+def load_artists(creativehub_token, artists):
+    for artist in artists.values():
+        artist_name_full: str = artist["name"]
+        artist_name = HumanName(artist_name_full)
+        birthday_ = re.sub(r"/\d*", "", artist["birthday"].strip())
+        birthday = parser.parse(birthday_) if birthday_ else datetime.now()
+        user = {
+            "username": artist["slug"],
+            "nickname": artist_name_full,
+            "email": artist["slug"] + "@creativehub.com",
+            "password": artist["slug"],
+            "role": "USER",
+            "creator": {
+                "name": artist_name.first,
+                "surname": artist_name.surnames,
+                "birthDate": birthday.date().isoformat(),
+                "bio": artist["biography"],
+                "creatorType": "ARTIST",
+                "avatar": artist["image"],
+                "paymentEmail": "payments@creativehub.com"
+            },
+            "enabled": True
+        }
+        pprint(user)
+        response = requests.post("http://localhost:8080/api/v1/users/", data=user,
+                                 headers={"X-ACCESS-TOKEN": creativehub_token})
+        pprint(response)
+
+
+def get_creativehub_token():
+    auth_data = {
+        "email": "root@creativehub.com",
+        "password": "root"
+    }
+    response = requests.post("http://localhost:8080/api/v1/users/auth/login", json=auth_data)
+    headers = response.headers
+    return headers["X-ACCESS-TOKEN"]
 
 
 if __name__ == '__main__':
