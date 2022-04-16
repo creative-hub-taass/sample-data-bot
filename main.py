@@ -1,4 +1,4 @@
-from pprint import pprint
+from datetime import datetime, timedelta, timezone
 
 import requests
 
@@ -6,23 +6,21 @@ artsy_auth = {
     "client_id": "f31d4faf871963e30f66",
     "client_secret": "2b56cd64b94facd6356cc623dd789048"
 }
-artists_count = 10
-artworks_count = 50
-events_count = 10
 
 
 def main():
+    artworks_count = 20
+    events_count = 20
     artsy_token = get_artsy_token()
-    artworks, artists = get_data(artsy_token)
+    artworks, artists = get_artworks_artists(artsy_token, artworks_count)
+    events = get_events(artsy_token, events_count)
     print("artworks:", len(artworks))
     print("artists:", len(artists))
-    pprint(artworks, compact=True, depth=2)
-    pprint(artists, compact=True, depth=2)
+    print("events:", len(events))
 
 
-def get_data(artsy_token):
-    response = requests.get(f"https://api.artsy.net/api/artworks?size={artworks_count}",
-                            headers={"X-XAPP-Token": artsy_token})
+def get_artworks_artists(artsy_token, count):
+    response = requests.get(f"https://api.artsy.net/api/artworks?size={count}", headers={"X-XAPP-Token": artsy_token})
     json = response.json()
     _artworks = list(json["_embedded"]["artworks"])
     artists = {}
@@ -42,6 +40,24 @@ def get_data(artsy_token):
             del artwork["_links"]
             artworks[artwork["id"]] = artwork
     return artworks, artists
+
+
+def get_events(artsy_token, count):
+    response = requests.get(f"https://api.artsy.net/api/shows?status=upcoming&size={count}",
+                            headers={"X-XAPP-Token": artsy_token})
+    json = response.json()
+    _shows = list(json["_embedded"]["shows"])
+    shows = {}
+    for show in _shows:
+        start_date = datetime.fromisoformat(show["start_at"])
+        end_date = datetime.fromisoformat(show["end_at"])
+        now = datetime.now(tz=timezone.utc)
+        lower_bound = now - timedelta(days=365)
+        upper_bound = now + timedelta(days=365)
+        if (lower_bound < start_date < upper_bound) and (lower_bound < end_date < upper_bound):
+            del show["_links"]
+            shows[show["id"]] = show
+    return shows
 
 
 def get_artsy_token():
