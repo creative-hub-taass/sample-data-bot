@@ -1,6 +1,5 @@
 import re
 from datetime import datetime, timedelta, timezone
-from pprint import pprint
 
 import requests
 from dateutil import parser
@@ -80,24 +79,24 @@ def load_artists(creativehub_token, artists):
         user = {
             "username": artist["slug"],
             "nickname": artist_name_full,
-            "email": artist["slug"] + "@creativehub.com",
+            "email": "artist-" + artist["slug"] + "@creativehub.com",
             "password": artist["slug"],
             "role": "USER",
             "creator": {
                 "name": artist_name.first,
                 "surname": artist_name.surnames,
                 "birthDate": birthday.date().isoformat(),
-                "bio": artist["biography"],
+                "bio": artist["biography"] or "",
                 "creatorType": "ARTIST",
                 "avatar": artist["image"],
                 "paymentEmail": "payments@creativehub.com"
             },
             "enabled": True
         }
-        pprint(user)
-        response = requests.post("http://localhost:8080/api/v1/users/", data=user,
+        response = requests.post("http://localhost:8080/api/v1/users/", json=user,
                                  headers={"X-ACCESS-TOKEN": creativehub_token})
-        pprint(response)
+        json = response.json()
+        artist["creativehub-id"] = json["id"]
 
 
 def get_creativehub_token():
