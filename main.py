@@ -1,6 +1,6 @@
 import re
+import uuid
 from datetime import datetime, timedelta, timezone
-from pprint import pprint
 from random import Random
 
 import requests
@@ -19,6 +19,7 @@ def main():
     print("events:", len(events))
     creativehub_token = get_creativehub_token()
     load_artists(creativehub_token, artists)
+    load_artworks(creativehub_token, artworks, artists)
 
 
 def get_artworks_artists(token, count):
@@ -107,11 +108,12 @@ def load_artworks(creativehub_token, artworks, artists):
         _date = re.sub(r"[\-/]\d*", "", _artwork["date"].strip())
         _date = re.sub(r"[a-zA-Z.,]", "", _date)
         date = parser.parse(_date) if _date else datetime.now()
+        date = date.replace(tzinfo=timezone.utc).isoformat()
         unique = bool(_artwork["unique"] or "true")
         copies = 1 if unique else random.randint(2, 10)
         onsale = random.choice([_artwork["can_acquire"], True, False])
         artwork = {
-            "creationDateTime": date.date().isoformat(),
+            "creationDateTime": date,
             "name": _artwork["title"],
             "description": _artwork["medium"] + " " + _artwork["collecting_institution"],
             "type": _artwork["category"],
@@ -119,15 +121,26 @@ def load_artworks(creativehub_token, artworks, artists):
             "attributes": {
                 "size": _artwork["dimensions"]["cm"]["text"]
             },
-            "images": {_artwork["image"]},
+            "images": [_artwork["image"]],
             "onSale": onsale,
             "price": round(random.random() * 900 + 100, 2) if onsale else None,
             "currency": "EUR" if onsale else None,
             "paymentEmail": "payments@creativehub.com" if onsale else None,
             "availableCopies": copies - random.randint(0, 10) if onsale else 0
         }
-        pprint(artwork)
-        # response = requests.post("http://localhost:8080/api/v1/artworks/", json=artwork, headers={"X-ACCESS-TOKEN": creativehub_token})
+        response = requests.post("http://localhost:8080/api/v1/publications/artworks/", json=artwork,
+                                 headers={"X-ACCESS-TOKEN": creativehub_token})
+        json = response.json()
+        creativehub_id = json["id"]
+        for artist_id in _artwork["artists_ids"]:
+            artist = artists[artist_id]
+            creation = {
+                "user": artist.get("creativehub-id") or str(uuid.uuid4()),
+                "artworkId": creativehub_id,
+                "creationType": "AUTHOR"
+            }
+            requests.post("http://localhost:8080/api/v1/publications/artworks/creations/", json=creation,
+                          headers={"X-ACCESS-TOKEN": creativehub_token})
 
 
 def get_creativehub_token():
