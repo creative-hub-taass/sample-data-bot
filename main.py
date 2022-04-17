@@ -1,3 +1,4 @@
+import argparse
 import re
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -8,21 +9,22 @@ from dateutil import parser
 from nameparser import HumanName
 
 
-def main():
-    artworks_count = 20
-    events_count = 20
-    artsy_token = get_artsy_token()
+def main(artworks_count: int, events_count: int, artsy_client_id: str, artsy_client_secret: str, api_base_url: str):
+    # Fetch data
+    artsy_token = get_artsy_token(artsy_client_id, artsy_client_secret)
     artworks, artists = get_artworks_artists(artsy_token, artworks_count)
     events = get_events(artsy_token, events_count)
-    print("artworks:", len(artworks))
-    print("artists:", len(artists))
-    print("events:", len(events))
-    creativehub_token = get_creativehub_token()
-    load_artists(creativehub_token, artists)
-    load_artworks(creativehub_token, artworks, artists)
+    # Upload data
+    api_token = get_creativehub_token(api_base_url)
+    load_artists(api_base_url, api_token, artists)
+    load_artworks(api_base_url, api_token, artworks, artists)
+    # Results
+    print("loaded artworks:", len(artworks))
+    print("loaded artists:", len(artists))
+    print("loaded events:", len(events))
 
 
-def get_artworks_artists(token, count):
+def get_artworks_artists(token: str, count: int) -> tuple:
     response = requests.get(f"https://api.artsy.net/api/artworks?size={count}", headers={"X-XAPP-Token": token})
     json = response.json()
     _artworks = list(json["_embedded"]["artworks"])
@@ -45,7 +47,7 @@ def get_artworks_artists(token, count):
     return artworks, artists
 
 
-def get_events(token, count):
+def get_events(token: str, count: int) -> dict:
     response = requests.get(f"https://api.artsy.net/api/shows?status=upcoming&size={count}",
                             headers={"X-XAPP-Token": token})
     json = response.json()
@@ -63,17 +65,17 @@ def get_events(token, count):
     return shows
 
 
-def get_artsy_token():
+def get_artsy_token(client_id: str, client_secret: str) -> str:
     auth_data = {
-        "client_id": "f31d4faf871963e30f66",
-        "client_secret": "2b56cd64b94facd6356cc623dd789048"
+        "client_id": client_id,
+        "client_secret": client_secret
     }
     response = requests.post("https://api.artsy.net/api/tokens/xapp_token", data=auth_data)
     json = response.json()
     return json["token"]
 
 
-def load_artists(creativehub_token, artists):
+def load_artists(base_url: str, token: str, artists: dict):
     for artist in artists.values():
         artist_name_full: str = artist["name"]
         artist_name = HumanName(artist_name_full)
@@ -96,13 +98,12 @@ def load_artists(creativehub_token, artists):
             },
             "enabled": True
         }
-        response = requests.post("http://localhost:8080/api/v1/users/", json=user,
-                                 headers={"X-ACCESS-TOKEN": creativehub_token})
+        response = requests.post(f"{base_url}/api/v1/users/", json=user, headers={"X-ACCESS-TOKEN": token})
         json = response.json()
         artist["creativehub-id"] = json["id"]
 
 
-def load_artworks(creativehub_token, artworks, artists):
+def load_artworks(base_url: str, token: str, artworks: dict, artists: dict):
     random = Random()
     for _artwork in artworks.values():
         _date = re.sub(r"[\-/]\d*", "", _artwork["date"].strip())
@@ -128,8 +129,8 @@ def load_artworks(creativehub_token, artworks, artists):
             "paymentEmail": "payments@creativehub.com" if onsale else None,
             "availableCopies": copies - random.randint(0, 10) if onsale else 0
         }
-        response = requests.post("http://localhost:8080/api/v1/publications/artworks/", json=artwork,
-                                 headers={"X-ACCESS-TOKEN": creativehub_token})
+        response = requests.post(f"{base_url}/api/v1/publications/artworks/", json=artwork,
+                                 headers={"X-ACCESS-TOKEN": token})
         json = response.json()
         creativehub_id = json["id"]
         for artist_id in _artwork["artists_ids"]:
@@ -139,19 +140,34 @@ def load_artworks(creativehub_token, artworks, artists):
                 "artworkId": creativehub_id,
                 "creationType": "AUTHOR"
             }
-            requests.post("http://localhost:8080/api/v1/publications/artworks/creations/", json=creation,
-                          headers={"X-ACCESS-TOKEN": creativehub_token})
+            requests.post(f"{base_url}/api/v1/publications/artworks/creations/", json=creation,
+                          headers={"X-ACCESS-TOKEN": token})
 
 
-def get_creativehub_token():
+def get_creativehub_token(base_url: str) -> str:
     auth_data = {
         "email": "root@creativehub.com",
         "password": "root"
     }
-    response = requests.post("http://localhost:8080/api/v1/users/auth/login", json=auth_data)
+    response = requests.post(f"{base_url}/api/v1/users/auth/login", json=auth_data)
     headers = response.headers
     return headers["X-ACCESS-TOKEN"]
 
 
 if __name__ == '__main__':
-    main()
+    argument_parser = argparse.ArgumentParser("sample-data-bot", description="creativeHub sample data bot")
+    argument_parser.add_argument("--artworks-count", type=int, default=20)
+    argument_parser.add_argument("--events-count", type=int, default=20)
+    argument_parser.add_argument("--artsy-client-id", default="f31d4faf871963e30f66")
+    argument_parser.add_argument("--artsy-client-secret", default="2b56cd64b94facd6356cc623dd789048")
+    group = argument_parser.add_mutually_exclusive_group()
+    group.add_argument("--api-base-url", default="http://localhost:8080")
+    group.add_argument("--local", dest="api_base_url", action="store_const", const="http://localhost:8080")
+    group.add_argument("--okteto", dest="api_base_url", action="store_const",
+                       const="https://api-gateway-taass-acontenti.cloud.okteto.net")
+    args = argument_parser.parse_args()
+    main(artworks_count=args.artworks_count,
+         events_count=args.events_count,
+         artsy_client_id=args.artsy_client_id,
+         artsy_client_secret=args.artsy_client_secret,
+         api_base_url=args.api_base_url)
