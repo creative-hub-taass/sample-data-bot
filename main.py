@@ -1,5 +1,6 @@
 import argparse
 import re
+import sys
 import uuid
 from datetime import datetime, timedelta, timezone
 from random import Random
@@ -18,13 +19,10 @@ def main(artworks_count: int, events_count: int, artsy_client_id: str, artsy_cli
     api_token = get_creativehub_token(api_base_url)
     load_artists(api_base_url, api_token, artists)
     load_artworks(api_base_url, api_token, artworks, artists)
-    # Results
-    print("loaded artworks:", len(artworks))
-    print("loaded artists:", len(artists))
-    print("loaded events:", len(events))
 
 
 def get_artworks_artists(token: str, count: int) -> tuple:
+    print("Attempt to get", count, "artworks with relative artists")
     response = requests.get(f"https://api.artsy.net/api/artworks?size={count}", headers={"X-XAPP-Token": token})
     json = response.json()
     _artworks = list(json["_embedded"]["artworks"])
@@ -44,10 +42,15 @@ def get_artworks_artists(token: str, count: int) -> tuple:
             artwork["image"] = artwork["_links"]["thumbnail"]["href"]
             del artwork["_links"]
             artworks[artwork["id"]] = artwork
+            sys.stdout.write("\033[K")
+            print("\rGot artwork:", artwork["title"], end="")
+    sys.stdout.write("\033[K")
+    print("\rGot", len(artworks), "artworks", "and", len(artists), "artists")
     return artworks, artists
 
 
 def get_events(token: str, count: int) -> dict:
+    print("Attempt to get", count, "events")
     response = requests.get(f"https://api.artsy.net/api/shows?status=upcoming&size={count}",
                             headers={"X-XAPP-Token": token})
     json = response.json()
@@ -62,20 +65,28 @@ def get_events(token: str, count: int) -> dict:
         if (lower_bound < start_date < upper_bound) and (lower_bound < end_date < upper_bound):
             del show["_links"]
             shows[show["id"]] = show
+            sys.stdout.write("\033[K")
+            print("\rGot event:", show["name"], end="")
+    sys.stdout.write("\033[K")
+    print("\rGot", len(shows), "events")
     return shows
 
 
 def get_artsy_token(client_id: str, client_secret: str) -> str:
+    print("Get Artsy token")
     auth_data = {
         "client_id": client_id,
         "client_secret": client_secret
     }
     response = requests.post("https://api.artsy.net/api/tokens/xapp_token", data=auth_data)
     json = response.json()
-    return json["token"]
+    token = json["token"]
+    print("Got Artsy token:", token)
+    return token
 
 
 def load_artists(base_url: str, token: str, artists: dict):
+    print("Attempt to upload", len(artists), "artists")
     for artist in artists.values():
         artist_name_full: str = artist["name"]
         artist_name = HumanName(artist_name_full)
@@ -98,12 +109,14 @@ def load_artists(base_url: str, token: str, artists: dict):
             },
             "enabled": True
         }
-        response = requests.post(f"{base_url}/api/v1/users/", json=user, headers={"X-ACCESS-TOKEN": token})
+        response = requests.post(f"{base_url}/api/v1/users/", json=user, headers={"Authorization": f"Bearer {token}"})
         json = response.json()
         artist["creativehub-id"] = json["id"]
+    print("Uploaded all artists")
 
 
 def load_artworks(base_url: str, token: str, artworks: dict, artists: dict):
+    print("Attempt to upload", len(artworks), "artworks")
     random = Random()
     for _artwork in artworks.values():
         _date = re.sub(r"[\-/]\d*", "", _artwork["date"].strip())
@@ -130,7 +143,7 @@ def load_artworks(base_url: str, token: str, artworks: dict, artists: dict):
             "availableCopies": copies - random.randint(0, 10) if onsale else 0
         }
         response = requests.post(f"{base_url}/api/v1/publications/artworks/", json=artwork,
-                                 headers={"X-ACCESS-TOKEN": token})
+                                 headers={"Authorization": f"Bearer {token}"})
         json = response.json()
         creativehub_id = json["id"]
         for artist_id in _artwork["artists_ids"]:
@@ -141,17 +154,21 @@ def load_artworks(base_url: str, token: str, artworks: dict, artists: dict):
                 "creationType": "AUTHOR"
             }
             requests.post(f"{base_url}/api/v1/publications/artworks/creations/", json=creation,
-                          headers={"X-ACCESS-TOKEN": token})
+                          headers={"Authorization": f"Bearer {token}"})
+    print("Uploaded all artworks")
 
 
 def get_creativehub_token(base_url: str) -> str:
+    print("Get creativeHub token")
     auth_data = {
         "email": "root@creativehub.com",
         "password": "root"
     }
     response = requests.post(f"{base_url}/api/v1/users/auth/login", json=auth_data)
     headers = response.headers
-    return headers["X-ACCESS-TOKEN"]
+    token = headers["X-ACCESS-TOKEN"]
+    print("Got creativeHub token:", token)
+    return token
 
 
 if __name__ == '__main__':
