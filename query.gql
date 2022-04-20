@@ -16,6 +16,7 @@ query ShowsCurrentShowsQuery($shows: Int, $artworks: Int) {
 
 fragment ShowsCurrentShow on Show {
     name
+    description
     href
     start: startAt
     end: endAt
@@ -30,6 +31,7 @@ fragment ShowsCurrentShow on Show {
     location {
         address
         city
+        country
         coordinates {
             lat
             lng

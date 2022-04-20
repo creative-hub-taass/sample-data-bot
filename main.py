@@ -10,14 +10,100 @@ from nameparser import HumanName
 from sgqlc.endpoint.http import HTTPEndpoint
 
 
-def main(artworks_count: int, events_count: int, artsy_client_id: str, artsy_client_secret: str, api_base_url: str):
+def main(artworks_count: int, events_count: int, api_base_url: str):
     # Fetch data
     data = get_artsy_data(artworks_count, events_count)
     # Upload data
-    # api_token = get_creativehub_token(api_base_url)
-    # load_artists(api_base_url, api_token, artists)
-    # load_artworks(api_base_url, api_token, artworks, artists)
-    # load_events(api_base_url, api_token, events)
+    api_token = get_creativehub_token(api_base_url)
+    load_data(api_base_url, api_token, data)
+
+
+def load_data(base_url: str, token: str, data: dict):
+    shows = data["data"]["viewer"]["showsConnection"]["edges"]
+    print("Attempt to upload", len(shows), "events")
+    for show in shows:
+        show = show["node"]
+        location = show["location"]
+        partner = show["partner"]
+        href = show["href"]
+        artworks = show["artworksConnection"]["edges"]
+        if not partner or not location or not href or not artworks:
+            continue
+        address = location["address"] + ", " + location["city"] + ", " + location["country"]
+        event = {
+            "name": show["name"],
+            "description": show["description"],
+            "image": show["coverImage"]["url"],
+            "locationName": partner["name"] + ", " + address,
+            "coordinates": {
+                "latitude": location["coordinates"]["lat"],
+                "longitude": location["coordinates"]["lng"]
+            },
+            "startDateTime": show["start"],
+            "endDateTime": show["end"],
+            "bookingURL": "https://www.artsy.net" + href
+        }
+        print("Attempt to upload", len(artworks), "artworks")
+        for _artwork in artworks:
+            _artwork = _artwork["node"]
+            _date = re.sub(r"[\-/]\d*", "", _artwork["date"].strip()) if "date" in _artwork else ""
+            _date = re.sub(r"[a-zA-Z.,]", "", _date)
+            date = parser.parse(_date) if _date else datetime.now()
+            date = date.replace(tzinfo=timezone.utc).isoformat()
+            unique = True if _artwork["edition_of"] is None else False
+            copies = 1 if unique else int(next(iter(re.findall(r"\d+", _artwork["edition_of"])), 1))
+            on_sale = _artwork["is_for_sale"] or _artwork["is_acquireable"]
+            sold = _artwork["is_sold"]
+            price = _artwork["price"]
+            artists = _artwork["artists"]
+            if on_sale and not price:
+                continue
+            additional_information = _artwork["additional_information"]
+            description = _artwork["meta"]["description"]
+            artwork = {
+                "creationDateTime": date,
+                "name": _artwork["title"],
+                "description": description + (".\n" + additional_information if additional_information else ""),
+                "type": _artwork["category"],
+                "copies": copies,
+                "attributes": {
+                    "size": _artwork["dimensions"]["cm"],
+                    "medium": _artwork["medium"]["text"]
+                },
+                "images": [_artwork["image"]["url"]],
+                "onSale": on_sale,
+                "price": price["minor"] if on_sale else None,
+                "currency": price["currencyCode"] if on_sale else None,
+                "paymentEmail": "payments@creativehub.com" if on_sale else None,
+                "availableCopies": copies if on_sale and not sold else 0
+            }
+            for _artist in artists:
+                artist_name_full: str = _artist["name"]
+                artist_name = HumanName(artist_name_full)
+                birthday_ = re.sub(r"/\d*", "", _artist["birthday"].strip())
+                birthday = parser.parse(birthday_) if birthday_ else datetime.now()
+                user = {
+                    "username": _artist["slug"],
+                    "nickname": artist_name_full,
+                    "email": "artist-" + _artist["slug"] + "@creativehub.com",
+                    "password": _artist["slug"],
+                    "role": "USER",
+                    "creator": {
+                        "name": artist_name.first,
+                        "surname": artist_name.surnames,
+                        "birthDate": birthday.date().isoformat(),
+                        "bio": _artist["biographyBlurb"]["text"] or "",
+                        "creatorType": "ARTIST",
+                        "avatar": _artist["image"]["url"],
+                        "paymentEmail": "payments@creativehub.com"
+                    },
+                    "enabled": True
+                }
+                response = requests.post(f"{base_url}/api/v1/users/", json=user,
+                                         headers={"Authorization": f"Bearer {token}"})
+            # response = requests.post(f"{base_url}/api/v1/publications/artworks/", json=artwork, headers={"Authorization": f"Bearer {token}"})
+        # requests.post(f"{base_url}/api/v1/publications/events/", json=event, headers={"Authorization": f"Bearer {token}"})
+    print("Uploaded all data")
 
 
 def get_artsy_data(artworks_count: int, events_count: int) -> dict:
@@ -144,16 +230,10 @@ if __name__ == '__main__':
     argument_parser = argparse.ArgumentParser("sample-data-bot", description="creativeHub sample data bot")
     argument_parser.add_argument("--artworks-count", type=int, default=20)
     argument_parser.add_argument("--events-count", type=int, default=20)
-    argument_parser.add_argument("--artsy-client-id", default="f31d4faf871963e30f66")
-    argument_parser.add_argument("--artsy-client-secret", default="2b56cd64b94facd6356cc623dd789048")
     group = argument_parser.add_mutually_exclusive_group()
     group.add_argument("--api-base-url", default="http://localhost:8080")
     group.add_argument("--local", dest="api_base_url", action="store_const", const="http://localhost:8080")
     group.add_argument("--okteto", dest="api_base_url", action="store_const",
                        const="https://api-gateway-taass-acontenti.cloud.okteto.net")
     args = argument_parser.parse_args()
-    main(artworks_count=args.artworks_count,
-         events_count=args.events_count,
-         artsy_client_id=args.artsy_client_id,
-         artsy_client_secret=args.artsy_client_secret,
-         api_base_url=args.api_base_url)
+    main(artworks_count=args.artworks_count, events_count=args.events_count, api_base_url=args.api_base_url)
