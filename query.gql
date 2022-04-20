@@ -1,0 +1,87 @@
+query ShowsCurrentShowsQuery($shows: Int, $artworks: Int) {
+    viewer {
+        showsConnection(first: $shows, displayable: true, atAFair: false, sort: END_AT_ASC, status: CURRENT, hasLocation: true) {
+            pageInfo {
+                hasNextPage
+                endCursor
+            }
+            edges {
+                node {
+                    ...ShowsCurrentShow
+                }
+            }
+        }
+    }
+}
+
+fragment ShowsCurrentShow on Show {
+    name
+    href
+    start: startAt
+    end: endAt
+    partner {
+        ... on Partner {
+            name
+        }
+        ... on ExternalPartner {
+            name
+        }
+    }
+    location {
+        address
+        city
+        coordinates {
+            lat
+            lng
+        }
+    }
+    coverImage {
+        url(version: "large")
+    }
+    artworksConnection(first: $artworks) {
+        edges {
+            node {
+                href
+                title
+                date
+                category
+                meta {
+                    description
+                }
+                edition_of: editionOf
+                is_acquireable: isAcquireable
+                is_for_sale: isForSale
+                is_sold: isSold
+                price: listPrice {
+                    ... on Money {
+                        minor
+                        currencyCode
+                    }
+                }
+                image {
+                    url(version: "large")
+                }
+                medium: mediumType {
+                    text: longDescription
+                }
+                additional_information: additionalInformation
+                collecting_institution: collectingInstitution
+                dimensions {
+                    cm
+                }
+                artists {
+                    id
+                    slug
+                    name
+                    birthday
+                    biographyBlurb(format: MARKDOWN) {
+                        text
+                    }
+                    image {
+                        url(version: "large")
+                    }
+                }
+            }
+        }
+    }
+}

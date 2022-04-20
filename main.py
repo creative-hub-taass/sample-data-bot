@@ -1,106 +1,36 @@
 import argparse
 import re
-import sys
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from random import Random
 
 import requests
 from dateutil import parser
-from geopy import Nominatim
 from nameparser import HumanName
-
-cities = ['Aarhus', 'Alicante', 'Amsterdam', 'Andorra la Vella', 'Antwerp', 'Athens', 'Barcelona', 'Bari',
-          'Belgrade', 'Berlin', 'Bern', 'Bielefeld', 'Bilbao', 'Bologna', 'Bonn', 'Bratislava', 'Bremen', 'Brno',
-          'Brussels', 'Bucharest', 'Budapest', 'Catania', 'Chisinau', 'Cologne', 'Copenhagen', 'Córdoba',
-          'Dortmund', 'Dresden', 'Dublin', 'Duisburg', 'Düsseldorf', 'Essen', 'Florence', 'Frankfurt am Main',
-          'Gdańsk', 'Genoa', 'Gothenburg', 'Hamburg', 'Hanover', 'Helsinki', 'Karlsruhe', 'Kraków', 'Las Palmas',
-          'Leipzig', 'Lisbon', 'Ljubljana', 'London', 'Lublin', 'Luxembourg', 'Lyon', 'Madrid', 'Malmö', 'Mannheim',
-          'Marseille', 'Milan', 'Minsk', 'Monaco', 'Moscow', 'Munich', 'Murcia', 'Málaga', 'Münster', 'Nantes',
-          'Naples', 'Nice', 'Nicosia', 'Nuremberg', 'Oslo', 'Palermo', 'Palma de Mallorca', 'Paris', 'Podgorica',
-          'Poznań', 'Prague', 'Reykjavik', 'Riga', 'Rome', 'Rotterdam', 'San Marino', 'Sarajevo', 'Seville',
-          'Sintra', 'Skopje', 'Sofia', 'Stockholm', 'Stuttgart', 'Szczecin', 'Tallinn', 'The Hague', 'Thessaloniki',
-          'Tirana', 'Toulouse', 'Turin', 'Utrecht', 'Vaduz', 'Valencia', 'Valletta', 'Varna', 'Vienna',
-          'Vila Nova de Gaia', 'Vilnius', 'Warsaw', 'Wrocław', 'Wuppertal', 'Zagreb', 'Zaragoza', 'Łódź'
-          ]
+from sgqlc.endpoint.http import HTTPEndpoint
 
 
 def main(artworks_count: int, events_count: int, artsy_client_id: str, artsy_client_secret: str, api_base_url: str):
     # Fetch data
-    artsy_token = get_artsy_token(artsy_client_id, artsy_client_secret)
-    artworks, artists = get_artworks_artists(artsy_token, artworks_count)
-    events = get_events(artsy_token, events_count)
+    data = get_artsy_data(artworks_count, events_count)
     # Upload data
-    api_token = get_creativehub_token(api_base_url)
-    load_artists(api_base_url, api_token, artists)
-    load_artworks(api_base_url, api_token, artworks, artists)
-    load_events(api_base_url, api_token, events)
+    # api_token = get_creativehub_token(api_base_url)
+    # load_artists(api_base_url, api_token, artists)
+    # load_artworks(api_base_url, api_token, artworks, artists)
+    # load_events(api_base_url, api_token, events)
 
 
-def get_artworks_artists(token: str, count: int) -> tuple:
-    print("Attempt to get", count, "artworks with relative artists")
-    response = requests.get(f"https://api.artsy.net/api/artworks?size={count}", headers={"X-XAPP-Token": token})
-    json = response.json()
-    _artworks = list(json["_embedded"]["artworks"])
-    artists = {}
-    artworks = {}
-    for artwork in _artworks:
-        response = requests.get(artwork["_links"]["artists"]["href"], headers={"X-XAPP-Token": token})
-        json = response.json()
-        _artists = list(json["_embedded"]["artists"])
-        if _artists:
-            for artist in _artists:
-                if artist["id"] not in artists:
-                    artist["image"] = artist["_links"]["thumbnail"]["href"]
-                    del artist["_links"]
-                    artists[artist["id"]] = artist
-            artwork["artists_ids"] = [artist["id"] for artist in _artists]
-            artwork["image"] = artwork["_links"]["thumbnail"]["href"]
-            del artwork["_links"]
-            artworks[artwork["id"]] = artwork
-            sys.stdout.write("\033[K")
-            print("\rGot artwork:", artwork["title"], end="")
-    sys.stdout.write("\033[K")
-    print("\rGot", len(artworks), "artworks", "and", len(artists), "artists")
-    return artworks, artists
-
-
-def get_events(token: str, count: int) -> dict:
-    print("Attempt to get", count, "events")
-    response = requests.get(f"https://api.artsy.net/api/shows?status=current&size={count}",
-                            headers={"X-XAPP-Token": token})
-    json = response.json()
-    _shows = list(json["_embedded"]["shows"])
-    shows = {}
-    for show in _shows:
-        start_date = datetime.fromisoformat(show["start_at"])
-        end_date = datetime.fromisoformat(show["end_at"])
-        now = datetime.now(tz=timezone.utc)
-        lower_bound = now - timedelta(days=365)
-        upper_bound = now + timedelta(days=365)
-        if (lower_bound < start_date < upper_bound) and (lower_bound < end_date < upper_bound):
-            show["image"] = show["_links"]["thumbnail"]["href"] if "thumbnail" in show["_links"] else ""
-            show["link"] = show["_links"]["permalink"]["href"]
-            del show["_links"]
-            shows[show["id"]] = show
-            sys.stdout.write("\033[K")
-            print("\rGot event:", show["name"], end="")
-    sys.stdout.write("\033[K")
-    print("\rGot", len(shows), "events")
-    return shows
-
-
-def get_artsy_token(client_id: str, client_secret: str) -> str:
-    print("Get Artsy token")
-    auth_data = {
-        "client_id": client_id,
-        "client_secret": client_secret
-    }
-    response = requests.post("https://api.artsy.net/api/tokens/xapp_token", data=auth_data)
-    json = response.json()
-    token = json["token"]
-    print("Got Artsy token:", token)
-    return token
+def get_artsy_data(artworks_count: int, events_count: int) -> dict:
+    with open("./query.gql", "r") as file:
+        artsy_graphql_query = file.read()
+        endpoint = HTTPEndpoint("https://metaphysics-production.artsy.net/v2", {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:99.0) Gecko/20100101 Firefox/99.0"
+        })
+        data = endpoint(artsy_graphql_query, {
+            "shows": events_count,
+            "artworks": artworks_count
+        })
+        return data
 
 
 def load_artists(base_url: str, token: str, artists: dict):
@@ -178,19 +108,15 @@ def load_artworks(base_url: str, token: str, artworks: dict, artists: dict):
 
 def load_events(base_url: str, token: str, events: dict):
     print("Attempt to upload", len(events), "events")
-    geolocator = Nominatim(user_agent="creative-hub/sample-data-bot")
-    random = Random()
     for _event in events.values():
-        place = random.choice(cities)
-        location = geolocator.geocode(place)
         event = {
             "name": _event["name"],
             "description": _event["description"],
             "image": _event["image"],
-            "locationName": place + ": " + location.address,
+            "locationName": "",
             "coordinates": {
-                "latitude": location.latitude,
-                "longitude": location.longitude
+                "latitude": "",
+                "longitude": ""
             },
             "startDateTime": _event["start_at"],
             "endDateTime": _event["end_at"],
