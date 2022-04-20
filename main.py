@@ -7,7 +7,22 @@ from random import Random
 
 import requests
 from dateutil import parser
+from geopy import Nominatim
 from nameparser import HumanName
+
+cities = ['Aarhus', 'Alicante', 'Amsterdam', 'Andorra la Vella', 'Antwerp', 'Athens', 'Barcelona', 'Bari',
+          'Belgrade', 'Berlin', 'Bern', 'Bielefeld', 'Bilbao', 'Bologna', 'Bonn', 'Bratislava', 'Bremen', 'Brno',
+          'Brussels', 'Bucharest', 'Budapest', 'Catania', 'Chisinau', 'Cologne', 'Copenhagen', 'Córdoba',
+          'Dortmund', 'Dresden', 'Dublin', 'Duisburg', 'Düsseldorf', 'Essen', 'Florence', 'Frankfurt am Main',
+          'Gdańsk', 'Genoa', 'Gothenburg', 'Hamburg', 'Hanover', 'Helsinki', 'Karlsruhe', 'Kraków', 'Las Palmas',
+          'Leipzig', 'Lisbon', 'Ljubljana', 'London', 'Lublin', 'Luxembourg', 'Lyon', 'Madrid', 'Malmö', 'Mannheim',
+          'Marseille', 'Milan', 'Minsk', 'Monaco', 'Moscow', 'Munich', 'Murcia', 'Málaga', 'Münster', 'Nantes',
+          'Naples', 'Nice', 'Nicosia', 'Nuremberg', 'Oslo', 'Palermo', 'Palma de Mallorca', 'Paris', 'Podgorica',
+          'Poznań', 'Prague', 'Reykjavik', 'Riga', 'Rome', 'Rotterdam', 'San Marino', 'Sarajevo', 'Seville',
+          'Sintra', 'Skopje', 'Sofia', 'Stockholm', 'Stuttgart', 'Szczecin', 'Tallinn', 'The Hague', 'Thessaloniki',
+          'Tirana', 'Toulouse', 'Turin', 'Utrecht', 'Vaduz', 'Valencia', 'Valletta', 'Varna', 'Vienna',
+          'Vila Nova de Gaia', 'Vilnius', 'Warsaw', 'Wrocław', 'Wuppertal', 'Zagreb', 'Zaragoza', 'Łódź'
+          ]
 
 
 def main(artworks_count: int, events_count: int, artsy_client_id: str, artsy_client_secret: str, api_base_url: str):
@@ -19,6 +34,7 @@ def main(artworks_count: int, events_count: int, artsy_client_id: str, artsy_cli
     api_token = get_creativehub_token(api_base_url)
     load_artists(api_base_url, api_token, artists)
     load_artworks(api_base_url, api_token, artworks, artists)
+    load_events(api_base_url, api_token, events)
 
 
 def get_artworks_artists(token: str, count: int) -> tuple:
@@ -51,7 +67,7 @@ def get_artworks_artists(token: str, count: int) -> tuple:
 
 def get_events(token: str, count: int) -> dict:
     print("Attempt to get", count, "events")
-    response = requests.get(f"https://api.artsy.net/api/shows?status=upcoming&size={count}",
+    response = requests.get(f"https://api.artsy.net/api/shows?status=current&size={count}",
                             headers={"X-XAPP-Token": token})
     json = response.json()
     _shows = list(json["_embedded"]["shows"])
@@ -63,6 +79,8 @@ def get_events(token: str, count: int) -> dict:
         lower_bound = now - timedelta(days=365)
         upper_bound = now + timedelta(days=365)
         if (lower_bound < start_date < upper_bound) and (lower_bound < end_date < upper_bound):
+            show["image"] = show["_links"]["thumbnail"]["href"] if "thumbnail" in show["_links"] else ""
+            show["link"] = show["_links"]["permalink"]["href"]
             del show["_links"]
             shows[show["id"]] = show
             sys.stdout.write("\033[K")
@@ -156,6 +174,31 @@ def load_artworks(base_url: str, token: str, artworks: dict, artists: dict):
             requests.post(f"{base_url}/api/v1/publications/artworks/creations/", json=creation,
                           headers={"Authorization": f"Bearer {token}"})
     print("Uploaded all artworks")
+
+
+def load_events(base_url: str, token: str, events: dict):
+    print("Attempt to upload", len(events), "events")
+    geolocator = Nominatim(user_agent="creative-hub/sample-data-bot")
+    random = Random()
+    for _event in events.values():
+        place = random.choice(cities)
+        location = geolocator.geocode(place)
+        event = {
+            "name": _event["name"],
+            "description": _event["description"],
+            "image": _event["image"],
+            "locationName": place + ": " + location.address,
+            "coordinates": {
+                "latitude": location.latitude,
+                "longitude": location.longitude
+            },
+            "startDateTime": _event["start_at"],
+            "endDateTime": _event["end_at"],
+            "bookingURL": _event["link"]
+        }
+        requests.post(f"{base_url}/api/v1/publications/events/", json=event,
+                      headers={"Authorization": f"Bearer {token}"})
+    print("Uploaded all events")
 
 
 def get_creativehub_token(base_url: str) -> str:
