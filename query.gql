@@ -1,0 +1,94 @@
+query CurrentShows($shows: Int, $artworks: Int) {
+    viewer {
+        showsConnection(first: $shows, displayable: true, atAFair: false, sort: END_AT_ASC, status: CURRENT, hasLocation: true) {
+            edges {
+                node {
+                    ...ShowInfo
+                }
+            }
+        }
+    }
+}
+
+fragment ShowInfo on Show {
+    id
+    name
+    description
+    href
+    start: startAt
+    end: endAt
+    partner {
+        ... on Partner {
+            name
+        }
+        ... on ExternalPartner {
+            name
+        }
+    }
+    location {
+        address
+        city
+        country
+        coordinates {
+            lat
+            lng
+        }
+    }
+    coverImage {
+        url(version: "large")
+    }
+    artworksConnection(first: $artworks) {
+        edges {
+            node {
+                ...ArtworkInfo
+            }
+        }
+    }
+}
+
+fragment ArtworkInfo on Artwork {
+    id
+    title
+    date
+    category
+    meta {
+        description
+    }
+    edition_of: editionOf
+    is_acquireable: isAcquireable
+    is_for_sale: isForSale
+    is_sold: isSold
+    price: listPrice {
+        ... on Money {
+            minor
+            currencyCode
+        }
+    }
+    image {
+        url(version: "large")
+    }
+    medium: mediumType {
+        text: longDescription
+    }
+    additional_information: additionalInformation
+    collecting_institution: collectingInstitution
+    dimensions {
+        cm
+    }
+    artists {
+        ...ArtistInfo
+    }
+}
+
+fragment ArtistInfo on Artist {
+    id
+    slug
+    name
+    birthday
+    biographyBlurb(format: MARKDOWN) {
+        text
+    }
+    image {
+        url(version: "large")
+    }
+}

@@ -7,7 +7,7 @@ name = "pypi"
 requests = "*"
 python-dateutil = "*"
 nameparser = "*"
-geopy = "*"
+sgqlc = "*"
 
 [dev-packages]
 
