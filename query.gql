@@ -1,20 +1,17 @@
-query ShowsCurrentShowsQuery($shows: Int, $artworks: Int) {
+query CurrentShows($shows: Int, $artworks: Int) {
     viewer {
         showsConnection(first: $shows, displayable: true, atAFair: false, sort: END_AT_ASC, status: CURRENT, hasLocation: true) {
-            pageInfo {
-                hasNextPage
-                endCursor
-            }
             edges {
                 node {
-                    ...ShowsCurrentShow
+                    ...ShowInfo
                 }
             }
         }
     }
 }
 
-fragment ShowsCurrentShow on Show {
+fragment ShowInfo on Show {
+    id
     name
     description
     href
@@ -43,47 +40,55 @@ fragment ShowsCurrentShow on Show {
     artworksConnection(first: $artworks) {
         edges {
             node {
-                href
-                title
-                date
-                category
-                meta {
-                    description
-                }
-                edition_of: editionOf
-                is_acquireable: isAcquireable
-                is_for_sale: isForSale
-                is_sold: isSold
-                price: listPrice {
-                    ... on Money {
-                        minor
-                        currencyCode
-                    }
-                }
-                image {
-                    url(version: "large")
-                }
-                medium: mediumType {
-                    text: longDescription
-                }
-                additional_information: additionalInformation
-                collecting_institution: collectingInstitution
-                dimensions {
-                    cm
-                }
-                artists {
-                    id
-                    slug
-                    name
-                    birthday
-                    biographyBlurb(format: MARKDOWN) {
-                        text
-                    }
-                    image {
-                        url(version: "large")
-                    }
-                }
+                ...ArtworkInfo
             }
         }
+    }
+}
+
+fragment ArtworkInfo on Artwork {
+    id
+    title
+    date
+    category
+    meta {
+        description
+    }
+    edition_of: editionOf
+    is_acquireable: isAcquireable
+    is_for_sale: isForSale
+    is_sold: isSold
+    price: listPrice {
+        ... on Money {
+            minor
+            currencyCode
+        }
+    }
+    image {
+        url(version: "large")
+    }
+    medium: mediumType {
+        text: longDescription
+    }
+    additional_information: additionalInformation
+    collecting_institution: collectingInstitution
+    dimensions {
+        cm
+    }
+    artists {
+        ...ArtistInfo
+    }
+}
+
+fragment ArtistInfo on Artist {
+    id
+    slug
+    name
+    birthday
+    biographyBlurb(format: MARKDOWN) {
+        text
+    }
+    image {
+        url(version: "large")
     }
 }
