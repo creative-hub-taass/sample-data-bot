@@ -19,6 +19,7 @@ def main(artworks_count: int, events_count: int, api_base_url: str):
 
 
 def get_artsy_data(artworks_count: int, events_count: int) -> dict:
+    print("Download Artsy data")
     with open("./query.gql", "r") as file:
         artsy_graphql_query = file.read()
         endpoint = HTTPEndpoint("https://metaphysics-production.artsy.net/v2", {
@@ -28,6 +29,7 @@ def get_artsy_data(artworks_count: int, events_count: int) -> dict:
             "shows": events_count,
             "artworks": artworks_count
         })
+        print("Downloaded Artsy data")
         return data
 
 
@@ -133,9 +135,10 @@ def upload_events(base_url: str, token: str, shows: dict):
         partner = show["partner"]
         href = show["href"]
         artworks = show["artworksConnection"]["edges"]
-        if not partner or not location or not href or not artworks:
+        if not partner or not location or not location["coordinates"] or not href or not artworks:
             continue
-        address = location["address"].strip() + ", " + location["city"] + ", " + location["country"]
+        address = map(lambda it: it.strip(), filter(None, [location["address"], location["city"], location["country"]]))
+        address = ", ".join(address)
         event = {
             "name": show["name"],
             "description": show["description"],
@@ -185,12 +188,8 @@ def get_creativehub_token(base_url: str) -> str:
 
 if __name__ == '__main__':
     argument_parser = argparse.ArgumentParser("sample-data-bot", description="creativeHub sample data bot")
-    argument_parser.add_argument("--artworks-count", type=int, default=20)
-    argument_parser.add_argument("--events-count", type=int, default=20)
-    group = argument_parser.add_mutually_exclusive_group()
-    group.add_argument("--api-base-url", default="http://localhost:8080")
-    group.add_argument("--local", dest="api_base_url", action="store_const", const="http://localhost:8080")
-    group.add_argument("--okteto", dest="api_base_url", action="store_const",
-                       const="https://api-gateway-taass-acontenti.cloud.okteto.net")
+    argument_parser.add_argument("--artworks", help="number of artworks per event to load", type=int, default=20)
+    argument_parser.add_argument("--events", help="number of events to load", type=int, default=20)
+    argument_parser.add_argument("--api-url", help="API Gateway URL", type=str, default="http://localhost:8080")
     args = argument_parser.parse_args()
-    main(artworks_count=args.artworks_count, events_count=args.events_count, api_base_url=args.api_base_url)
+    main(artworks_count=args.artworks, events_count=args.events, api_base_url=args.api_url)
