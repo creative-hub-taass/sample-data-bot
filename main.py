@@ -179,7 +179,7 @@ def get_creativehub_token(base_url: str) -> str:
         "email": "root@creativehub.com",
         "password": "root"
     }
-    response = requests.post(f"{base_url}/api/v1/users/auth/login", json=auth_data)
+    response = requests.post(f"{base_url}/api/v1/users/-/auth/login", json=auth_data)
     headers = response.headers
     token = headers["X-ACCESS-TOKEN"]
     print("Got creativeHub token:", token)
