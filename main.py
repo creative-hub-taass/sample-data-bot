@@ -83,7 +83,8 @@ def upload_artworks(base_url: str, token: str, artworks: dict) -> set:
         sold = _artwork["is_sold"]
         price = _artwork["price"]
         artists = _artwork["artists"]
-        if on_sale and not price:
+        image = _artwork["image"]
+        if (on_sale and not price) or not image or not artists:
             continue
         additional_info = _artwork["additional_information"]
         description = _artwork["meta"]["description"].strip()
@@ -98,7 +99,7 @@ def upload_artworks(base_url: str, token: str, artworks: dict) -> set:
                 "size": _artwork["dimensions"]["cm"],
                 "medium": _artwork["medium"]["text"]
             },
-            "images": [_artwork["image"]["url"]],
+            "images": [image["url"]],
             "onSale": on_sale,
             "price": price["minor"] if on_sale else None,
             "currency": price["currencyCode"] if on_sale else None,
