@@ -75,7 +75,12 @@ def upload_artworks(base_url: str, token: str, artworks: dict) -> set:
             continue
         _date = re.sub(r"[\-/]\d*", "", _artwork["date"].strip()) if "date" in _artwork else ""
         _date = re.sub(r"[a-zA-Z.,]", "", _date)
-        date = parser.parse(_date) if _date else datetime.now()
+        date = datetime.now()
+        if _date:
+            try:
+                date = parser.parse(_date)
+            except Exception as e:
+                print(e)
         date = date.replace(tzinfo=timezone.utc).isoformat()
         unique = True if _artwork["edition_of"] is None else False
         copies = 1 if unique else int(next(iter(re.findall(r"\d+", _artwork["edition_of"])), 1))
