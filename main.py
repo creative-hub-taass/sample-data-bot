@@ -4,6 +4,7 @@ import re
 from datetime import datetime, timezone
 from typing import Dict, Set, List
 
+import lorem
 import requests
 from dateutil import parser
 from nameparser import HumanName
@@ -174,7 +175,7 @@ def upload_events(base_url: str, token: str, shows: dict):
             creation = {
                 "user": artist_id,
                 "eventId": ch_id,
-                "creationType": "COAUTHOR"
+                "creationType": "PARTICIPANT"
             }
             requests.post(f"{base_url}/api/v1/publications/events/creations/", json=creation,
                           headers={"Authorization": f"Bearer {token}"})
@@ -182,11 +183,29 @@ def upload_events(base_url: str, token: str, shows: dict):
     print("Uploaded events")
 
 
-def upload_random_posts(count: int) -> Set[str]:
-    print("Attempt to upload random posts")
-    # TODO
+def upload_random_posts(base_url: str, token: str, count: int, artists: Set[str]) -> Set[str]:
+    print(f"Attempt to upload {count} random posts")
+    posts_ids = set()
+    for i in range(count):
+        post = {
+            "title": lorem.sentence(),
+            "body": lorem.text(),
+        }
+        response = requests.post(f"{base_url}/api/v1/publications/posts/", json=post,
+                                 headers={"Authorization": f"Bearer {token}"})
+        json = response.json()
+        ch_id = json["id"]
+        for artist_id in random.sample(sorted(artists), random.randrange(1, 3)):
+            creation = {
+                "user": artist_id,
+                "postId": ch_id,
+                "creationType": "COAUTHOR"
+            }
+            requests.post(f"{base_url}/api/v1/publications/posts/creations/", json=creation,
+                          headers={"Authorization": f"Bearer {token}"})
+        posts_ids.add(ch_id)
     print("Uploaded random posts")
-    return set()
+    return posts_ids
 
 
 def upload_random_follows(base_url: str, token: str, artists: Set[str]):
@@ -220,8 +239,8 @@ def upload_random_likes(base_url: str, token: str, publications: Set[str], artis
 def upload_data(base_url: str, token: str, data: dict, posts_count: int):
     shows = data["data"]["viewer"]["showsConnection"]["edges"]
     upload_events(base_url, token, shows)
-    post_ids = upload_random_posts(posts_count)
     artists = set(artists_ids.values())
+    post_ids = upload_random_posts(base_url, token, posts_count, artists)
     publications = set(artworks_ids.values()) | set(events_ids.values()) | post_ids
     upload_random_follows(base_url, token, artists)
     upload_random_likes(base_url, token, publications, sorted(artists))

@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "e59b54cd0a9cf925f28a13728d4eed736ca1e1f29103432b06073e474360973e"
+            "sha256": "1c28ad711d228bd7c762fb2fceb0f0e442920c6066630bd4ab32aeda57dd9bf0"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -18,10 +18,11 @@
     "default": {
         "certifi": {
             "hashes": [
-                "sha256:78884e7c1d4b00ce3cea67b44566851c4343c120abd683433ce934a68ea58872",
-                "sha256:d62a0163eb4c2344ac042ab2bdf75399a71a2d8c7d47eac2e2ee91b9d6339569"
+                "sha256:9c5705e395cd70084351dd8ad5c41e65655e08ce46f2ec9cf6c2c08390f71eb7",
+                "sha256:f1d53542ee8cbedbe2118b5686372fb33c297fcd6379b050cca0ef13a597382a"
             ],
-            "version": "==2021.10.8"
+            "markers": "python_version >= '3.6'",
+            "version": "==2022.5.18.1"
         },
         "charset-normalizer": {
             "hashes": [
@@ -46,6 +47,14 @@
             ],
             "markers": "python_version >= '3'",
             "version": "==3.3"
+        },
+        "lorem": {
+            "hashes": [
+                "sha256:785f4109a241fc2891e59705e85d065f6e6d3ed6ad91750a8cb54d4f3e59d934",
+                "sha256:c9c2914b5a772022417c398bd74b7bbd712e73ff029ba82720855e458f13ae42"
+            ],
+            "index": "pypi",
+            "version": "==0.1.1"
         },
         "nameparser": {
             "hashes": [
