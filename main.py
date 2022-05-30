@@ -40,7 +40,9 @@ def upload_artists(base_url: str, token: str, artists: dict):
             continue
         artist_name_full: str = artist["name"]
         artist_name = HumanName(artist_name_full)
-        birthday_ = re.sub(r"/\d*", "", artist["birthday"].strip())
+        birthday_ = artist["birthday"]
+        birthday_ = re.sub(r"/\d*", "", birthday_)
+        birthday_ = re.sub(r"[\w.,]*", "", birthday_).strip()
         birthday = parser.parse(birthday_) if birthday_ else datetime.now()
         user = {
             "username": artist["slug"],
