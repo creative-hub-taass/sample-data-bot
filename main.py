@@ -7,6 +7,7 @@ from typing import Dict, Set, List
 import lorem
 import requests
 from dateutil import parser
+from lorem.text import TextLorem
 from nameparser import HumanName
 from sgqlc.endpoint.http import HTTPEndpoint
 
@@ -16,11 +17,13 @@ artists_ids: Dict[str, str] = {}
 
 
 def main(artworks_count: int, events_count: int, posts_count: int, api_base_url: str):
+    print(f"Started sample-data-bot with url: {api_base_url}")
     # Fetch data
     data = get_artsy_data(artworks_count, events_count)
     # Upload data
     api_token = get_creativehub_token(api_base_url)
     upload_data(api_base_url, api_token, data, posts_count)
+    print("Finished uploading data")
 
 
 def get_artsy_data(artworks_count: int, events_count: int) -> dict:
@@ -236,6 +239,25 @@ def upload_random_likes(base_url: str, token: str, publications: Set[str], artis
     print("Uploaded random likes")
 
 
+def upload_random_comments(base_url: str, token: str, publications: Set[str], artists: List[str]):
+    comments = []
+    lorem_gen = TextLorem(prange=(1, 5))
+    for publication_id in publications:
+        number = random.randrange(0, int(len(artists) / 4))
+        users = random.sample(artists, number)
+        for user_id in users:
+            comment = {
+                "userId": user_id,
+                "publicationId": publication_id,
+                "message": lorem_gen.paragraph()
+            }
+            comments.append(comment)
+    print(f"Attempt to upload {len(comments)} random comments")
+    requests.post(f"{base_url}/api/v1/interactions/comments", json=comments,
+                  headers={"Authorization": f"Bearer {token}"})
+    print("Uploaded random comments")
+
+
 def upload_data(base_url: str, token: str, data: dict, posts_count: int):
     shows = data["data"]["viewer"]["showsConnection"]["edges"]
     upload_events(base_url, token, shows)
@@ -244,6 +266,7 @@ def upload_data(base_url: str, token: str, data: dict, posts_count: int):
     publications = set(artworks_ids.values()) | set(events_ids.values()) | post_ids
     upload_random_follows(base_url, token, artists)
     upload_random_likes(base_url, token, publications, sorted(artists))
+    upload_random_comments(base_url, token, publications, sorted(artists))
 
 
 def get_creativehub_token(base_url: str) -> str:
