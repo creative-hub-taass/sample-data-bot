@@ -116,7 +116,7 @@ def upload_artworks(base_url: str, token: str, artworks: dict) -> set:
             },
             "images": [image["url"]],
             "onSale": on_sale,
-            "price": price["minor"] if on_sale else None,
+            "price": float(price["minor"]) / 100.0 if on_sale else None,
             "currency": price["currencyCode"] if on_sale else None,
             "paymentEmail": "payments@creativehub.com" if on_sale else None,
             "availableCopies": copies if on_sale and not sold else 0
