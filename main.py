@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Dict, Set, List
 
 import lorem
+import names
 import requests
 from dateutil import parser
 from lorem.text import TextLorem
@@ -16,13 +17,18 @@ artworks_ids: Dict[str, str] = {}
 artists_ids: Dict[str, str] = {}
 
 
-def main(artworks_count: int, events_count: int, posts_count: int, api_base_url: str):
+def main(api_base_url: str,
+         artworks_count: int,
+         events_count: int,
+         posts_count: int,
+         collab_req_count: int,
+         users_count: int):
     print(f"Started sample-data-bot with url: {api_base_url}")
     # Fetch data
     data = get_artsy_data(artworks_count, events_count)
     # Upload data
     api_token = get_creativehub_token(api_base_url)
-    upload_data(api_base_url, api_token, data, posts_count)
+    upload_data(api_base_url, api_token, data, posts_count, collab_req_count, users_count)
     print("Finished uploading data")
 
 
@@ -211,23 +217,24 @@ def upload_random_posts(base_url: str, token: str, count: int, artists: Set[str]
     return posts_ids
 
 
-def upload_random_follows(base_url: str, token: str, artists: Set[str]):
+def upload_random_follows(base_url: str, token: str, artists: Set[str], users_ids: List[str]):
     follows = []
+    potential_followers = artists.union(users_ids)
     for artist_id in artists:
-        others = sorted(artists - {artist_id})
-        number = random.randrange(0, len(others))
-        followed = random.sample(others, number)
-        follows.extend([artist_id, followed_id] for followed_id in followed)
+        followers = sorted(potential_followers - {artist_id})
+        number = random.randrange(0, len(followers))
+        followers = random.sample(followers, number)
+        follows.extend([follower_id, artist_id] for follower_id in followers)
     print(f"Attempt to upload {len(follows)} random follows")
     requests.put(f"{base_url}/api/v1/users/follows", json=follows, headers={"Authorization": f"Bearer {token}"})
     print("Uploaded random follows")
 
 
-def upload_random_likes(base_url: str, token: str, publications: Set[str], artists: List[str]):
+def upload_random_likes(base_url: str, token: str, publications: Set[str], users: List[str]):
     likes = []
     for publication_id in publications:
-        number = random.randrange(0, len(artists))
-        users = random.sample(artists, number)
+        number = random.randrange(0, len(users))
+        users = random.sample(users, number)
         for user_id in users:
             like = {
                 "userId": user_id,
@@ -239,12 +246,12 @@ def upload_random_likes(base_url: str, token: str, publications: Set[str], artis
     print("Uploaded random likes")
 
 
-def upload_random_comments(base_url: str, token: str, publications: Set[str], artists: List[str]):
+def upload_random_comments(base_url: str, token: str, publications: Set[str], users: List[str]):
     comments = []
     lorem_gen = TextLorem(prange=(1, 5))
     for publication_id in publications:
-        number = random.randrange(0, int(len(artists) / 4))
-        users = random.sample(artists, number)
+        number = random.randrange(0, int(len(users) / 4))
+        users = random.sample(users, number)
         for user_id in users:
             comment = {
                 "userId": user_id,
@@ -258,15 +265,61 @@ def upload_random_comments(base_url: str, token: str, publications: Set[str], ar
     print("Uploaded random comments")
 
 
-def upload_data(base_url: str, token: str, data: dict, posts_count: int):
+def upload_random_collab_requests(base_url: str, token: str, artists: List[str], count: int):
+    print(f"Attempt to upload {count} random collab requests")
+    lorem_gen = TextLorem(prange=(1, 5))
+    for i in range(count):
+        sender = random.choice(artists)
+        recipient = random.choice(artists) if random.choice([True, False]) else None
+        request = {
+            "senderId": sender,
+            "receiverId": recipient,
+            "title": lorem_gen.sentence(),
+            "description": lorem_gen.paragraph(),
+            "contact": "collab@creativehub.com",
+            "category": "Art",
+            "status": random.choice(["OPEN", "CLOSED"])
+        }
+        requests.post(f"{base_url}/api/v1/interactions/collabs/request", json=request,
+                      headers={"Authorization": f"Bearer {token}"})
+    print("Uploaded random comments")
+
+
+def upload_random_users(base_url: str, token: str, count: int) -> List[str]:
+    print(f"Attempt to upload {count} random users")
+    users_ids = []
+    for i in range(count):
+        first_name = names.get_first_name()
+        last_name = names.get_last_name()
+        slug = (first_name + "-" + last_name).lower()
+        user = {
+            "nickname": first_name + " " + last_name,
+            "email": slug + "@creativehub.com",
+            "password": slug,
+            "role": "USER",
+            "creator": None,
+            "enabled": True
+        }
+        response = requests.post(f"{base_url}/api/v1/users/", json=user, headers={"Authorization": f"Bearer {token}"})
+        json = response.json()
+        ch_id = json["id"]
+        users_ids.append(ch_id)
+    print("Uploaded random comments")
+    return users_ids
+
+
+def upload_data(base_url: str, token: str, data: dict, posts_count: int, collab_req_count: int, users_count: int):
     shows = data["data"]["viewer"]["showsConnection"]["edges"]
     upload_events(base_url, token, shows)
     artists = set(artists_ids.values())
     post_ids = upload_random_posts(base_url, token, posts_count, artists)
     publications = set(artworks_ids.values()) | set(events_ids.values()) | post_ids
-    upload_random_follows(base_url, token, artists)
-    upload_random_likes(base_url, token, publications, sorted(artists))
-    upload_random_comments(base_url, token, publications, sorted(artists))
+    users_ids = upload_random_users(base_url, token, users_count)
+    all_users = sorted(artists) + users_ids
+    upload_random_follows(base_url, token, artists, users_ids)
+    upload_random_likes(base_url, token, publications, all_users)
+    upload_random_comments(base_url, token, publications, all_users)
+    upload_random_collab_requests(base_url, token, sorted(artists), collab_req_count)
 
 
 def get_creativehub_token(base_url: str) -> str:
@@ -287,9 +340,15 @@ if __name__ == '__main__':
     argument_parser.add_argument("--artworks", help="number of artworks per event to load", type=int, default=20)
     argument_parser.add_argument("--events", help="number of events to load", type=int, default=20)
     argument_parser.add_argument("--posts", help="number of posts to load", type=int, default=20)
+    argument_parser.add_argument("--users", help="number of users to load", type=int, default=100)
+    argument_parser.add_argument("--collab-req", help="number of collab requests to load", type=int, default=20)
     argument_parser.add_argument("--api-url", help="API Gateway URL", type=str, default="http://localhost:8080")
     args = argument_parser.parse_args()
-    main(artworks_count=args.artworks,
-         events_count=args.events,
-         posts_count=args.posts,
-         api_base_url=args.api_url)
+    main(
+        api_base_url=args.api_url,
+        artworks_count=args.artworks,
+        events_count=args.events,
+        posts_count=args.posts,
+        collab_req_count=args.collab_req,
+        users_count=args.users
+    )

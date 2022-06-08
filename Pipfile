@@ -9,6 +9,7 @@ python-dateutil = "*"
 nameparser = "*"
 sgqlc = "*"
 lorem = "*"
+names = "*"
 
 [dev-packages]
 
