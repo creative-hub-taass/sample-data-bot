@@ -265,26 +265,6 @@ def upload_random_comments(base_url: str, token: str, publications: Set[str], us
     print("Uploaded random comments")
 
 
-def upload_random_collab_requests(base_url: str, token: str, artists: List[str], count: int):
-    print(f"Attempt to upload {count} random collab requests")
-    lorem_gen = TextLorem(prange=(1, 5))
-    for i in range(count):
-        sender = random.choice(artists)
-        recipient = random.choice(artists) if random.choice([True, False]) else None
-        request = {
-            "senderId": sender,
-            "receiverId": recipient,
-            "title": lorem_gen.sentence(),
-            "description": lorem_gen.paragraph(),
-            "contact": "collab@creativehub.com",
-            "category": "Art",
-            "status": random.choice(["OPEN", "CLOSED"])
-        }
-        requests.post(f"{base_url}/api/v1/interactions/collabs/request", json=request,
-                      headers={"Authorization": f"Bearer {token}"})
-    print("Uploaded random comments")
-
-
 def upload_random_users(base_url: str, token: str, count: int) -> List[str]:
     print(f"Attempt to upload {count} random users")
     users_ids = []
@@ -304,8 +284,56 @@ def upload_random_users(base_url: str, token: str, count: int) -> List[str]:
         json = response.json()
         ch_id = json["id"]
         users_ids.append(ch_id)
+        if random.random() >= 0.9:
+            upload_random_upgrade_request(base_url, token, json)
     print("Uploaded random comments")
     return users_ids
+
+
+def upload_random_collab_requests(base_url: str, token: str, artists: List[str], count: int):
+    print(f"Attempt to upload {count} random collab requests")
+    lorem_gen = TextLorem(prange=(1, 5))
+    for i in range(count):
+        sender = random.choice(artists)
+        recipient = random.choice(artists) if random.choice([True, False]) else None
+        request = {
+            "senderId": sender,
+            "receiverId": recipient,
+            "title": lorem_gen.sentence(),
+            "description": lorem_gen.paragraph(),
+            "contact": "collab@creativehub.com",
+            "category": "Art",
+            "status": random.choice(["OPEN", "CLOSED"])
+        }
+        requests.post(f"{base_url}/api/v1/interactions/collabs/request", json=request,
+                      headers={"Authorization": f"Bearer {token}"})
+    print("Uploaded random collab requests")
+
+
+def upload_random_upgrade_request(base_url: str, token: str, user: dict):
+    print(f"Attempt to upload random upgrade request")
+    lorem_gen = TextLorem(prange=(1, 5))
+    name, surname = str(user["nickname"]).split(" ")
+    now = datetime.now().timestamp()
+    date = datetime.fromtimestamp(now - random.randrange(0, 2 * round(now)))
+    request = {
+        "user": user,
+        "name": name,
+        "surname": surname,
+        "bio": lorem_gen.paragraph(),
+        "portfolio": lorem_gen.paragraph(),
+        "motivationalText": lorem_gen.paragraph(),
+        "artName": user["nickname"],
+        "birthDate": date.replace(tzinfo=timezone.utc).isoformat(),
+        "username": name.lower() + surname,
+        "avatar": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/User-avatar.svg/768px-User-avatar.svg.png",
+        "paymentEmail": "payments@creativehub.com",
+        "status": "OPEN" if random.random() >= 0.9 else "REJECTED",
+        "creatorType": "ARTIST",
+    }
+    requests.post(f"{base_url}/api/v1/users/upgrade/request", json=request,
+                  headers={"Authorization": f"Bearer {token}"})
+    print("Uploaded random upgrade request")
 
 
 def upload_data(base_url: str, token: str, data: dict, posts_count: int, collab_req_count: int, users_count: int):
