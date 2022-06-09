@@ -1,7 +1,7 @@
 import argparse
 import random
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Set, List
 
 import lorem
@@ -140,8 +140,10 @@ def upload_artworks(base_url: str, token: str, artworks: dict) -> set:
                 "artworkId": ch_id,
                 "creationType": "AUTHOR"
             }
-            requests.post(f"{base_url}/api/v1/publications/artworks/creations/", json=creation,
-                          headers={"Authorization": f"Bearer {token}"})
+            response = requests.post(f"{base_url}/api/v1/publications/artworks/creations/", json=creation,
+                                     headers={"Authorization": f"Bearer {token}"})
+            if not response.ok:
+                response.raise_for_status()
             loaded_artists.add(ch_artist_id)
         artworks_ids[_artwork["id"]] = ch_id
     print("Uploaded artworks")
@@ -186,8 +188,10 @@ def upload_events(base_url: str, token: str, shows: dict):
                 "eventId": ch_id,
                 "creationType": "PARTICIPANT"
             }
-            requests.post(f"{base_url}/api/v1/publications/events/creations/", json=creation,
-                          headers={"Authorization": f"Bearer {token}"})
+            response = requests.post(f"{base_url}/api/v1/publications/events/creations/", json=creation,
+                                     headers={"Authorization": f"Bearer {token}"})
+            if not response.ok:
+                response.raise_for_status()
         events_ids[show["id"]] = ch_id
     print("Uploaded events")
 
@@ -210,8 +214,10 @@ def upload_random_posts(base_url: str, token: str, count: int, artists: Set[str]
                 "postId": ch_id,
                 "creationType": "COAUTHOR"
             }
-            requests.post(f"{base_url}/api/v1/publications/posts/creations/", json=creation,
-                          headers={"Authorization": f"Bearer {token}"})
+            response = requests.post(f"{base_url}/api/v1/publications/posts/creations/", json=creation,
+                                     headers={"Authorization": f"Bearer {token}"})
+            if not response.ok:
+                response.raise_for_status()
         posts_ids.add(ch_id)
     print("Uploaded random posts")
     return posts_ids
@@ -226,15 +232,18 @@ def upload_random_follows(base_url: str, token: str, artists: Set[str], users_id
         followers = random.sample(followers, number)
         follows.extend([follower_id, artist_id] for follower_id in followers)
     print(f"Attempt to upload {len(follows)} random follows")
-    requests.put(f"{base_url}/api/v1/users/follows", json=follows, headers={"Authorization": f"Bearer {token}"})
+    response = requests.put(f"{base_url}/api/v1/users/follows", json=follows,
+                            headers={"Authorization": f"Bearer {token}"})
+    if not response.ok:
+        response.raise_for_status()
     print("Uploaded random follows")
 
 
-def upload_random_likes(base_url: str, token: str, publications: Set[str], users: List[str]):
+def upload_random_likes(base_url: str, token: str, publications: Set[str], all_users: List[str]):
     likes = []
     for publication_id in publications:
-        number = random.randrange(0, len(users))
-        users = random.sample(users, number)
+        number = random.randrange(0, len(all_users))
+        users = random.sample(all_users, number)
         for user_id in users:
             like = {
                 "userId": user_id,
@@ -242,16 +251,19 @@ def upload_random_likes(base_url: str, token: str, publications: Set[str], users
             }
             likes.append(like)
     print(f"Attempt to upload {len(likes)} random likes")
-    requests.post(f"{base_url}/api/v1/interactions/likes", json=likes, headers={"Authorization": f"Bearer {token}"})
+    response = requests.post(f"{base_url}/api/v1/interactions/likes", json=likes,
+                             headers={"Authorization": f"Bearer {token}"})
+    if not response.ok:
+        response.raise_for_status()
     print("Uploaded random likes")
 
 
-def upload_random_comments(base_url: str, token: str, publications: Set[str], users: List[str]):
+def upload_random_comments(base_url: str, token: str, publications: Set[str], all_users: List[str]):
     comments = []
     lorem_gen = TextLorem(prange=(1, 5))
     for publication_id in publications:
-        number = random.randrange(0, int(len(users) / 4))
-        users = random.sample(users, number)
+        number = random.randrange(0, int(len(all_users) / 10))
+        users = random.sample(all_users, number)
         for user_id in users:
             comment = {
                 "userId": user_id,
@@ -260,8 +272,10 @@ def upload_random_comments(base_url: str, token: str, publications: Set[str], us
             }
             comments.append(comment)
     print(f"Attempt to upload {len(comments)} random comments")
-    requests.post(f"{base_url}/api/v1/interactions/comments", json=comments,
-                  headers={"Authorization": f"Bearer {token}"})
+    response = requests.post(f"{base_url}/api/v1/interactions/comments", json=comments,
+                             headers={"Authorization": f"Bearer {token}"})
+    if not response.ok:
+        response.raise_for_status()
     print("Uploaded random comments")
 
 
@@ -273,11 +287,11 @@ def upload_random_users(base_url: str, token: str, count: int) -> List[str]:
         last_name = names.get_last_name()
         slug = (first_name + "-" + last_name).lower()
         user = {
+            "username": slug,
             "nickname": first_name + " " + last_name,
             "email": slug + "@creativehub.com",
             "password": slug,
             "role": "USER",
-            "creator": None,
             "enabled": True
         }
         response = requests.post(f"{base_url}/api/v1/users/", json=user, headers={"Authorization": f"Bearer {token}"})
@@ -286,7 +300,7 @@ def upload_random_users(base_url: str, token: str, count: int) -> List[str]:
         users_ids.append(ch_id)
         if random.random() >= 0.9:
             upload_random_upgrade_request(base_url, token, json)
-    print("Uploaded random comments")
+    print("Uploaded random users")
     return users_ids
 
 
@@ -305,8 +319,10 @@ def upload_random_collab_requests(base_url: str, token: str, artists: List[str],
             "category": "Art",
             "status": random.choice(["OPEN", "CLOSED"])
         }
-        requests.post(f"{base_url}/api/v1/interactions/collabs/request", json=request,
-                      headers={"Authorization": f"Bearer {token}"})
+        response = requests.post(f"{base_url}/api/v1/interactions/collabs/request", json=request,
+                                 headers={"Authorization": f"Bearer {token}"})
+        if not response.ok:
+            response.raise_for_status()
     print("Uploaded random collab requests")
 
 
@@ -314,8 +330,9 @@ def upload_random_upgrade_request(base_url: str, token: str, user: dict):
     print(f"Attempt to upload random upgrade request")
     lorem_gen = TextLorem(prange=(1, 5))
     name, surname = str(user["nickname"]).split(" ")
-    now = datetime.now().timestamp()
-    date = datetime.fromtimestamp(now - random.randrange(0, 2 * round(now)))
+    now = round(datetime.now().timestamp())
+    diff = now - random.randrange(0, 2 * now)
+    date = datetime(1970, 1, 1) + timedelta(seconds=diff)
     request = {
         "user": user,
         "name": name,
@@ -328,11 +345,13 @@ def upload_random_upgrade_request(base_url: str, token: str, user: dict):
         "username": name.lower() + surname,
         "avatar": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/User-avatar.svg/768px-User-avatar.svg.png",
         "paymentEmail": "payments@creativehub.com",
-        "status": "OPEN" if random.random() >= 0.9 else "REJECTED",
+        "status": "REJECTED" if random.random() >= 0.9 else "OPEN",
         "creatorType": "ARTIST",
     }
-    requests.post(f"{base_url}/api/v1/users/upgrade/request", json=request,
-                  headers={"Authorization": f"Bearer {token}"})
+    response = requests.post(f"{base_url}/api/v1/users/upgrade/request", json=request,
+                             headers={"Authorization": f"Bearer {token}"})
+    if not response.ok:
+        response.raise_for_status()
     print("Uploaded random upgrade request")
 
 
@@ -342,12 +361,12 @@ def upload_data(base_url: str, token: str, data: dict, posts_count: int, collab_
     artists = set(artists_ids.values())
     post_ids = upload_random_posts(base_url, token, posts_count, artists)
     publications = set(artworks_ids.values()) | set(events_ids.values()) | post_ids
+    upload_random_collab_requests(base_url, token, sorted(artists), collab_req_count)
     users_ids = upload_random_users(base_url, token, users_count)
-    all_users = sorted(artists) + users_ids
     upload_random_follows(base_url, token, artists, users_ids)
+    all_users = sorted(artists) + users_ids
     upload_random_likes(base_url, token, publications, all_users)
     upload_random_comments(base_url, token, publications, all_users)
-    upload_random_collab_requests(base_url, token, sorted(artists), collab_req_count)
 
 
 def get_creativehub_token(base_url: str) -> str:
