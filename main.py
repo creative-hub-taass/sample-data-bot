@@ -309,7 +309,7 @@ def upload_random_collab_requests(base_url: str, token: str, artists: List[str],
     lorem_gen = TextLorem(prange=(1, 5))
     for i in range(count):
         sender = random.choice(artists)
-        recipient = random.choice(artists) if random.choice([True, False]) else None
+        recipient = random.choice(artists) if random.choice([True, False]) else sender
         request = {
             "senderId": sender,
             "receiverId": recipient,
